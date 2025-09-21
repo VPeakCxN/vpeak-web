@@ -14,7 +14,6 @@ function getOrigin() {
   return `${protocol}://${host}`;
 }
 
-// ✅ FIXED: Return redirect URL instead of redirecting directly
 export async function signInWithGoogle() {
   const cookieStore = await cookies();
   
@@ -48,7 +47,7 @@ export async function signInWithGoogle() {
   }
 
   if (data.url) {
-    return data.url; // ✅ Return the URL instead of redirecting
+    redirect(data.url);
   }
 
   throw new Error("No redirect URL received");

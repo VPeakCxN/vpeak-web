@@ -1,9 +1,9 @@
+// lib/supabase/server.ts
 import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 export function createSupabaseServerClient() {
-  // Next.js 15: cookies() returns a Promise<ReadonlyRequestCookies>
   const cookieStorePromise = cookies();
 
   return createServerClient(

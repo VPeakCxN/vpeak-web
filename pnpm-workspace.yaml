@@ -1,2 +1,5 @@
 ignoredBuiltDependencies:
   - supabase
+
+onlyBuiltDependencies:
+  - sharp

@@ -67,6 +67,7 @@
     "react-router-dom": "latest",
     "recharts": "latest",
     "server-only": "latest",
+    "sharp": "^0.34.4",
     "sonner": "latest",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
