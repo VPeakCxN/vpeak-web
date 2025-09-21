@@ -23,7 +23,7 @@ export function SharePopover({
   isAuthenticated: initialAuthenticated,
   initialIsShared,
 }: SharePopoverProps) {
-  const { isAuthenticated, currentUserId } = useCookies(initialAuthenticated);
+  const { isAuthenticated, currentUserId } = useCookies();
   const [sharesCount, setSharesCount] = useState(initialSharesCount);
   const [isShared, setIsShared] = useState(initialIsShared);
   const [isPending, setIsPending] = useState(false);
@@ -98,8 +98,7 @@ export function SharePopover({
             disabled={!isAuthenticated || isPending}
             onClick={handleShare}
           >
-            <Share2 className="h-4 w-4 mr-1" />
-            <span>Share</span>
+            <Share2 className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-80 bg-background border-border">
