@@ -1,8 +1,10 @@
+// ImageCarousel.tsx
 'use client';
 
 import Image from 'next/image';
 import { useState } from 'react';
 import type { Tables } from '@/lib/database.types';
+import { Button } from '@/components/ui/button';
 
 type PostFile = Tables<'post_files'>;
 
@@ -27,7 +29,7 @@ export function ImageCarousel({ files }: ImageCarouselProps) {
   const isImage = currentFile.type.startsWith('image/');
 
   return (
-    <div className="relative w-full aspect-square overflow-hidden bg-gray-100">
+    <div className="relative w-full aspect-square overflow-hidden bg-muted rounded-lg">
       {isImage ? (
         <Image
           src={currentFile.file_url}
@@ -39,32 +41,34 @@ export function ImageCarousel({ files }: ImageCarouselProps) {
         />
       ) : (
         <div className="flex items-center justify-center h-full">
-          <p className="text-gray-500">Unsupported media type: {currentFile.type}</p>
+          <p className="text-muted-foreground">Unsupported media type: {currentFile.type}</p>
         </div>
       )}
       
       {files.length > 1 && (
         <>
-          <button
+          <Button
             onClick={prevSlide}
-            className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition"
+            className="absolute left-2 top-1/2 -translate-y-1/2 bg-background/50 text-foreground p-2 rounded-full hover:bg-background/70 transition"
             aria-label="Previous slide"
+            variant="ghost"
           >
             &lt;
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={nextSlide}
-            className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition"
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-background/50 text-foreground p-2 rounded-full hover:bg-background/70 transition"
             aria-label="Next slide"
+            variant="ghost"
           >
             &gt;
-          </button>
+          </Button>
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex space-x-2">
             {files.map((_, idx) => (
               <div
                 key={idx}
                 className={`w-2 h-2 rounded-full ${
-                  idx === currentIndex ? 'bg-white' : 'bg-white/50'
+                  idx === currentIndex ? 'bg-primary' : 'bg-primary/50'
                 }`}
               />
             ))}

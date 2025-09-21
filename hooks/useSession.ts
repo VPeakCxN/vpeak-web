@@ -43,7 +43,7 @@ export function useSession() {
         if (data.valid) {
           console.log('✅ useSession: Valid session received:', data.session?.id);
           const sessionData: AuthSession = {
-            id: data.session.id,
+            session_id: data.session.id,
             uid: data.session.uid,
             session_key: data.session.session_key,
             created_at: data.session.created_at,

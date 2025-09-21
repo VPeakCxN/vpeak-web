@@ -1,247 +1,354 @@
+// @/components/Comments.tsx
 'use client';
 
+import { useState, useEffect } from 'react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
-import { useState, useTransition, useEffect } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { Trash2, Send } from 'lucide-react';
+import { Trash2, Send, Edit2, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { createClient } from '@supabase/supabase-js';
+import { useCookies } from '@/hooks/getCookies';
 import type { Tables } from '@/lib/database.types';
-import { AuthSession } from '@/lib/cookies.types';
 
 type Comment = Tables<'post_comments'> & { name?: string; avatar?: string };
 
 interface CommentsProps {
   postId: string;
   initialComments: Comment[];
-  currentUserId?: string;
+  initialCommentsCount: number;
   isAuthenticated: boolean;
-  session?: AuthSession;
+  currentUserId?: string | null;
 }
 
-interface StudentData {
-  uid: string;
-  name: string;
-  avatar?: string;
-}
-
-export function Comments({ postId, initialComments, currentUserId, isAuthenticated, session }: CommentsProps) {
-  const [comments, setComments] = useState(initialComments);
+export function Comments({
+  postId,
+  initialComments,
+  initialCommentsCount,
+  isAuthenticated: initialAuthenticated,
+  currentUserId: initialUserId,
+}: CommentsProps) {
+  const { isAuthenticated, user, currentUserId } = useCookies(initialAuthenticated, initialUserId);
+  const [comments, setComments] = useState<Comment[]>(initialComments);
+  const [commentsCount, setCommentsCount] = useState(initialCommentsCount);
   const [commentText, setCommentText] = useState('');
-  const [showAllComments, setShowAllComments] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const [studentData, setStudentData] = useState<{ [key: string]: { name: string; avatar?: string } }>({});
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
 
-  useEffect(() => {
-    async function fetchStudentData() {
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-      const userUids = [...new Set(comments.map((c) => c.user_id).filter(Boolean))] as string[];
-
-      if (userUids.length > 0) {
-        const { data: students } = await supabase
-          .from('students')
-          .select('uid, name, avatar')
-          .in('uid', userUids);
-
-        if (students) {
-          const dataMap = students.reduce(
-            (acc: { [key: string]: { name: string; avatar?: string } }, student: StudentData) => {
-              acc[student.uid] = { name: student.name, avatar: student.avatar };
-              return acc;
-            },
-            {}
-          );
-          setStudentData(dataMap);
-        }
-      }
-    }
-
-    fetchStudentData();
-  }, [comments]);
-
-  const displayedComments = showAllComments ? comments : comments.slice(0, 3);
-
-  const handleAddComment = () => {
-    if (!isAuthenticated) {
+  const handleAddComment = async () => {
+    if (!isAuthenticated || !currentUserId) {
       toast.error('Please log in to comment');
       return;
     }
 
     if (!commentText.trim()) {
-      toast.error('Please enter a comment before submitting');
+      toast.error('Please enter a comment');
       return;
     }
 
-    startTransition(async () => {
-      try {
-        const response = await fetch('/api/posts/comments', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ post_id: postId, comment: commentText }),
-        });
+    setIsPending(true);
+    const newComment: Comment = {
+      uuid: `temp-${Date.now()}`,
+      post_id: postId,
+      user_id: currentUserId,
+      comment: commentText,
+      created_at: new Date().toISOString(),
+      name: user?.name || 'Unknown',
+      avatar: user?.avatar,
+    };
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to add comment');
-        }
+    setComments([newComment, ...comments]);
+    setCommentsCount((prev) => prev + 1);
+    setCommentText('');
 
-        const newComment = await response.json();
-        setComments([newComment, ...comments]);
-        setCommentText('');
-        toast.success('Comment added successfully!');
-      } catch (error: any) {
-        toast.error(error.message || 'Failed to add comment. Please try again.');
+    try {
+      const response = await fetch('/api/posts/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ post_id: postId, comment: commentText }),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to add comment');
       }
-    });
+
+      const { comment: savedComment } = await response.json();
+      setComments((prev) =>
+        prev.map((c) => (c.uuid === newComment.uuid ? savedComment : c))
+      );
+      toast.success('Comment added!');
+
+      await fetch('/api/revalidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: `/posts/${postId}` }),
+        credentials: 'include',
+      });
+    } catch (error: any) {
+      setComments(comments);
+      setCommentsCount(commentsCount);
+      toast.error(error.message || 'Failed to add comment');
+    } finally {
+      setIsPending(false);
+    }
   };
 
-  const handleDeleteComment = (commentId: string) => {
-    if (!isAuthenticated) {
+  const handleEditComment = async (commentId: string) => {
+    if (!isAuthenticated || !currentUserId) {
+      toast.error('Please log in to edit a comment');
+      return;
+    }
+
+    if (!commentText.trim()) {
+      toast.error('Please enter a comment');
+      return;
+    }
+
+    setIsPending(true);
+    const originalComments = comments;
+    setComments(
+      comments.map((c) =>
+        c.uuid === commentId
+          ? { ...c, comment: commentText, created_at: new Date().toISOString() }
+          : c
+      )
+    );
+
+    try {
+      const response = await fetch('/api/posts/comments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comment_id: commentId, post_id: postId, comment: commentText }),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update comment');
+      }
+
+      const { comment: updatedComment } = await response.json();
+      setComments((prev) =>
+        prev.map((c) => (c.uuid === commentId ? updatedComment : c))
+      );
+      setCommentText('');
+      setEditingCommentId(null);
+      toast.success('Comment updated!');
+
+      await fetch('/api/revalidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: `/posts/${postId}` }),
+        credentials: 'include',
+      });
+    } catch (error: any) {
+      setComments(originalComments);
+      toast.error(error.message || 'Failed to update comment');
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!isAuthenticated || !currentUserId) {
       toast.error('Please log in to delete a comment');
       return;
     }
 
-    startTransition(async () => {
-      try {
-        const response = await fetch('/api/posts/comments', {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ comment_id: commentId, post_id: postId }),
-        });
+    setIsPending(true);
+    const originalComments = comments;
+    setComments(comments.filter((c) => c.uuid !== commentId));
+    setCommentsCount((prev) => prev - 1);
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to delete comment');
-        }
+    try {
+      const response = await fetch('/api/posts/comments', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comment_id: commentId, post_id: postId }),
+        credentials: 'include',
+      });
 
-        setComments(comments.filter((c) => c.uuid !== commentId));
-        toast.success('Comment deleted');
-      } catch (error: any) {
-        toast.error(error.message || 'Failed to delete comment. Please try again.');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete comment');
       }
-    });
+
+      toast.success('Comment deleted!');
+
+      await fetch('/api/revalidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: `/posts/${postId}` }),
+        credentials: 'include',
+      });
+    } catch (error: any) {
+      setComments(originalComments);
+      setCommentsCount(commentsCount);
+      toast.error(error.message || 'Failed to delete comment');
+    } finally {
+      setIsPending(false);
+    }
   };
 
-  if (comments.length === 0 && !isAuthenticated) {
-    return null;
-  }
+  const startEditing = (comment: Comment) => {
+    setEditingCommentId(comment.uuid);
+    setCommentText(comment.comment);
+  };
 
   return (
-    <div className="space-y-4">
-      <Separator />
-
-      {isAuthenticated && (
-        <div className="space-y-3">
-          <div className="flex space-x-3">
-            <Avatar className="h-8 w-8">
-              <AvatarFallback className="text-xs">You</AvatarFallback>
-            </Avatar>
-            <div className="flex-1 space-y-2">
-              <Textarea
-                placeholder="Write a comment..."
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                className="min-h-[80px] resize-none"
-                disabled={isPending}
-              />
-              <div className="flex justify-end">
-                <Button
-                  size="sm"
-                  onClick={handleAddComment}
-                  disabled={isPending || !commentText.trim()}
-                  className="gap-2"
-                >
-                  <Send className="h-4 w-4" />
-                  {isPending ? 'Posting...' : 'Post Comment'}
-                </Button>
+    <div className="flex items-center space-x-2">
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="p-0 h-auto text-foreground hover:bg-transparent"
+            disabled={!isAuthenticated}
+          >
+            <MessageCircle className="h-4 w-4 mr-1" />
+            <span>Comment</span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-96 bg-background border-border">
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold text-foreground">
+              {editingCommentId ? 'Edit Comment' : 'Write a Comment'}
+            </h4>
+            <div className="flex space-x-3">
+              <Avatar className="h-8 w-8">
+                {user?.avatar ? (
+                  <AvatarImage src={user.avatar} alt={user.name} />
+                ) : (
+                  <AvatarFallback className="text-xs text-foreground">
+                    {user?.name?.charAt(0) || 'U'}
+                  </AvatarFallback>
+                )}
+              </Avatar>
+              <div className="flex-1 space-y-2">
+                <Textarea
+                  placeholder={editingCommentId ? 'Edit your comment...' : 'Write a comment...'}
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  className="min-h-[80px] resize-none bg-background text-foreground border-border"
+                  disabled={isPending}
+                />
+                <div className="flex justify-end space-x-2">
+                  {editingCommentId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingCommentId(null);
+                        setCommentText('');
+                      }}
+                      disabled={isPending}
+                      className="text-foreground border-border"
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      editingCommentId ? handleEditComment(editingCommentId) : handleAddComment()
+                    }
+                    disabled={isPending || !commentText.trim()}
+                    className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
+                  >
+                    <Send className="h-4 w-4" />
+                    {isPending
+                      ? editingCommentId
+                        ? 'Updating...'
+                        : 'Posting...'
+                      : editingCommentId
+                        ? 'Update'
+                        : 'Post'}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        </PopoverContent>
+      </Popover>
 
-      {comments.length > 0 && (
-        <div className="space-y-4">
-          <h4 className="text-sm font-semibold">Comments ({comments.length})</h4>
-
-          <div className="space-y-4">
-            {displayedComments.map((comment) => (
-              <div key={comment.uuid} className="flex space-x-3 group">
-                <Avatar className="h-8 w-8">
-                  {studentData[comment.user_id]?.avatar ? (
-                    <AvatarImage src={studentData[comment.user_id].avatar} alt={studentData[comment.user_id].name} />
-                  ) : (
-                    <AvatarFallback className="text-xs">
-                      {studentData[comment.user_id]?.name?.charAt(0) || 'U'}
-                    </AvatarFallback>
-                  )}
-                </Avatar>
-
-                <div className="flex-1 space-y-1">
-                  <div className="bg-muted/50 rounded-lg p-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <span className="font-semibold text-sm">
-                          {studentData[comment.user_id]?.name || 'User'}
-                        </span>
-                        <p className="text-sm mt-1 leading-relaxed">{comment.comment}</p>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            className="p-0 h-auto font-normal hover:bg-transparent text-foreground"
+          >
+            <span>{commentsCount} Comments</span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-96 bg-background border-border">
+          <div className="space-y-4 max-h-[50vh] overflow-y-auto">
+            <h4 className="text-sm font-semibold text-foreground">
+              Comments ({commentsCount})
+            </h4>
+            {comments.length > 0 ? (
+              comments.map((comment) => (
+                <div key={comment.uuid} className="flex space-x-3 group">
+                  <Avatar className="h-8 w-8">
+                    {comment.avatar ? (
+                      <AvatarImage src={comment.avatar} alt={comment.name} />
+                    ) : (
+                      <AvatarFallback className="text-xs text-foreground">
+                        {comment.name?.charAt(0) || 'U'}
+                      </AvatarFallback>
+                    )}
+                  </Avatar>
+                  <div className="flex-1 space-y-1">
+                    <div className="bg-muted/50 rounded-lg p-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <span className="font-semibold text-sm text-foreground">
+                            {comment.name || 'User'}
+                          </span>
+                          <p className="text-sm mt-1 leading-relaxed text-foreground">
+                            {comment.comment}
+                          </p>
+                        </div>
+                        {currentUserId === comment.user_id && (
+                          <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 hover:bg-accent"
+                              onClick={() => startEditing(comment)}
+                              disabled={isPending}
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                              onClick={() => handleDeleteComment(comment.uuid)}
+                              disabled={isPending}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
-
-                      {currentUserId === comment.user_id && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 ml-2 hover:bg-destructive hover:text-destructive-foreground"
-                          onClick={() => handleDeleteComment(comment.uuid)}
-                          disabled={isPending}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      )}
                     </div>
-                  </div>
-
-                  <div className="flex items-center space-x-4 text-xs text-muted-foreground px-3">
-                    <span>
+                    <div className="text-xs text-muted-foreground px-3">
                       {comment.created_at
                         ? formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })
                         : 'Just now'}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-auto p-0 text-xs hover:text-foreground"
-                    >
-                      Reply
-                    </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-center text-muted-foreground">No comments yet</p>
+            )}
           </div>
-
-          {comments.length > 3 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowAllComments(!showAllComments)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              {showAllComments ? 'Show less comments' : `View all ${comments.length} comments`}
-            </Button>
-          )}
-        </div>
-      )}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
