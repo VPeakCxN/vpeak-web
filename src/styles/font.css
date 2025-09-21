@@ -1,0 +1,8 @@
+/* Press Start 2P for the VPeak brand title ONLY */
+@import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap");
+
+.logo-font {
+  font-family: "Press Start 2P", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  letter-spacing: 0.5px;
+}
