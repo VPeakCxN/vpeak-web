@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation'; // Add this import
+import { useRouter } from 'next/navigation';
 import { useSession, type SessionData } from '@/hooks/useSession';
-import { createPost, type CreatePostPayload } from '@/lib/actions/posts/create';
+import { createPost, type CreatePostPayload, type CreatePostResult } from '@/lib/actions/posts/create';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,7 +38,7 @@ interface FilePreview {
 
 export default function CreatePostPage() {
   const { session, loading: sessionLoading, isAuthenticated, user } = useSession();
-  const router = useRouter(); // Add this
+  const router = useRouter();
   const [formData, setFormData] = useState<CreatePostPayload>({
     title: '',
     content: '',
@@ -55,7 +55,7 @@ export default function CreatePostPage() {
   // Manual auth check + redirect (since no middleware)
   useEffect(() => {
     if (!sessionLoading && !isAuthenticated) {
-      router.push('/login'); // Or window.location.href if preferred
+      router.push('/login');
     }
   }, [sessionLoading, isAuthenticated, router]);
 
@@ -113,7 +113,7 @@ export default function CreatePostPage() {
     try {
       const fileObjects = files.filter(f => !f.uploaded && !f.error).map(f => f.file);
 
-      const result = await createPost({
+      const result: CreatePostResult = await createPost({
         ...formData,
         files: fileObjects.length > 0 ? fileObjects : undefined,
       });
@@ -128,8 +128,19 @@ export default function CreatePostPage() {
         });
         setFiles([]);
 
+        const postId = result.post?.post_id;
+
+        if (!postId) {
+          console.error('Post ID not found in creation result');
+          setSubmitStatus({ type: 'error', message: 'Post created, but unable to redirect to details' });
+          setTimeout(() => {
+            router.push('/posts');
+          }, 2000);
+          return;
+        }
+
         setTimeout(() => {
-          window.location.href = '/posts';
+          router.push(`/posts/${postId}`);
         }, 2000);
       } else {
         setSubmitStatus({

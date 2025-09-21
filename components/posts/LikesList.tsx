@@ -27,7 +27,7 @@ export function LikesList({
   isAuthenticated: initialAuthenticated,
   currentUserId: initialUserId,
 }: LikesListProps) {
-  const { isAuthenticated, currentUserId, user } = useCookies(initialAuthenticated, initialUserId);
+  const { isAuthenticated, currentUserId, user } = useCookies();
   const [likers, setLikers] = useState<Liker[]>(initialLikers);
   const [likesCount, setLikesCount] = useState(initialLikesCount);
   const [isLiked, setIsLiked] = useState(
@@ -131,8 +131,7 @@ export function LikesList({
         onClick={handleLike}
         disabled={isPending || isLiked}
       >
-        <Heart className={`h-4 w-4 mr-1 ${isLiked ? 'fill-current' : ''}`} />
-        <span>{isLiked ? 'Liked' : 'Like'}</span>
+        <Heart className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
       </Button>
       <Popover>
         <PopoverTrigger asChild>
