@@ -1,6 +1,6 @@
-// lib/actions/posts/create.ts
 import { uploadFiles } from '../files/upload';
 import { type Database } from '@/lib/database.types';
+import { generateUUID } from '@/lib/tools/generateUUID';
 
 export type CreatePostPayload = {
   title: string;
@@ -27,7 +27,7 @@ export interface CreatePostResult {
     originalFileName: string;
   }[];
   errors?: string[];
-}
+};
 
 export async function createPost(payload: CreatePostPayload): Promise<CreatePostResult> {
   try {
@@ -37,8 +37,8 @@ export async function createPost(payload: CreatePostPayload): Promise<CreatePost
       author_id: payload.author_id
     });
 
-    // Step 1: Generate post ID
-    const postId = `post_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Step 1: Generate post ID using UUID
+    const postId = generateUUID();
 
     // Step 2: Upload files first (if any)
     let uploadedFiles: any[] = [];
@@ -104,11 +104,13 @@ export async function createPost(payload: CreatePostPayload): Promise<CreatePost
     // Step 4: Save file references to post_files table
     if (uploadedFiles.length > 0) {
       const fileRecords = uploadedFiles.map((file) => ({
-        uuid: `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        uuid: generateUUID(),
         post_id: postId,
         file_name: file.fileName,
         file_url: file.publicUrl,
-        type: file.fileName.split('.').pop()?.toLowerCase() || 'unknown',
+        type: file.wasCompressed && file.compression?.format
+          ? `image/${file.compression.format}` // Use MIME type from compression result
+          : (file.type || 'application/octet-stream'), // Fallback to file.type or generic MIME
         content: payload.content.substring(0, 100),
         created_at: new Date().toISOString(),
       }));

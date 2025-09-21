@@ -1,4 +1,3 @@
-// lib/storage/imageCompressor.ts
 import sharp from 'sharp';
 
 // Image compression configuration
@@ -31,16 +30,10 @@ export interface CompressionResult {
   wasCompressed: boolean;
 }
 
-/**
- * Check if a file is an image
- */
 export function isImage(file: File): boolean {
   return file.type.startsWith('image/');
 }
 
-/**
- * Get image dimensions using sharp
- */
 export async function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -55,12 +48,10 @@ export async function getImageDimensions(file: File): Promise<{ width: number; h
   }
 }
 
-/**
- * Compress a single image file
- */
 export async function compressImage(
   file: File,
-  config: CompressionConfig = DEFAULT_CONFIG
+  config: CompressionConfig = DEFAULT_CONFIG,
+  index?: number
 ): Promise<CompressionResult> {
   try {
     console.log(`Starting compression for: ${file.name} (${file.size} bytes)`);
@@ -68,15 +59,13 @@ export async function compressImage(
     const originalSize = file.size;
     const buffer = Buffer.from(await file.arrayBuffer());
     
-    // Get original dimensions
     const { width: origWidth, height: origHeight } = await getImageDimensions(file);
     console.log(`Original dimensions: ${origWidth}x${origHeight}`);
 
-    // Determine if compression is needed
     const needsCompression = 
       file.size > config.maxFileSize! || 
-      origWidth > config.maxWidth! || 
-      origHeight > config.maxHeight! ||
+      (config.maxWidth && origWidth > config.maxWidth) || 
+      (config.maxHeight && origHeight > config.maxHeight) ||
       !config.resizeOnly;
 
     if (!needsCompression) {
@@ -93,18 +82,15 @@ export async function compressImage(
       };
     }
 
-    // Determine target format
     const targetFormat = config.format || 'jpeg';
-
-    // Sharp processing options
     const sharpOptions: sharp.ResizeOptions & sharp.JpegOptions & sharp.PngOptions = {
-      width: config.maxWidth,
-      height: config.maxHeight,
+      // Only resize if dimensions exceed maxWidth or maxHeight
+      width: config.maxWidth && origWidth > config.maxWidth ? config.maxWidth : origWidth,
+      height: config.maxHeight && origHeight > config.maxHeight ? config.maxHeight : origHeight,
       fit: sharp.fit.inside,
       withoutEnlargement: true,
     };
 
-    // Apply quality settings based on format
     if (targetFormat === 'jpeg') {
       Object.assign(sharpOptions, { quality: config.quality });
     } else if (targetFormat === 'png') {
@@ -117,15 +103,18 @@ export async function compressImage(
     let finalWidth = origWidth;
     let finalHeight = origHeight;
 
-    // Apply aggressive compression if file is very large
     if (file.size > config.maxFileSize! * 2) {
       console.log('Applying aggressive compression for large file');
       const aggressiveConfig = { ...config, maxWidth: 1024, maxHeight: 768, quality: 70 };
       processedBuffer = await sharp(buffer)
-        .resize(aggressiveConfig.maxWidth, aggressiveConfig.maxHeight, {
-          fit: sharp.fit.inside,
-          withoutEnlargement: true,
-        })
+        .resize(
+          aggressiveConfig.maxWidth && origWidth > aggressiveConfig.maxWidth ? aggressiveConfig.maxWidth : origWidth,
+          aggressiveConfig.maxHeight && origHeight > aggressiveConfig.maxHeight ? aggressiveConfig.maxHeight : origHeight,
+          {
+            fit: sharp.fit.inside,
+            withoutEnlargement: true,
+          }
+        )
         .jpeg({ quality: aggressiveConfig.quality })
         .toBuffer();
       
@@ -133,7 +122,6 @@ export async function compressImage(
       finalWidth = aggressiveMetadata.width || origWidth;
       finalHeight = aggressiveMetadata.height || origHeight;
     } else {
-      // Normal compression
       const sharpChain = sharp(buffer).resize(sharpOptions.width!, sharpOptions.height!);
       
       switch (targetFormat) {
@@ -155,30 +143,28 @@ export async function compressImage(
       finalHeight = metadata.height || origHeight;
     }
 
-    // Determine MIME type based on format
     let mimeType: string;
+    let ext: string;
     switch (targetFormat) {
       case 'jpeg':
         mimeType = 'image/jpeg';
+        ext = 'jpg';
         break;
       case 'png':
         mimeType = 'image/png';
+        ext = 'png';
         break;
       case 'webp':
         mimeType = 'image/webp';
+        ext = 'webp';
         break;
       default:
         mimeType = file.type;
+        ext = file.type.split('/')[1] || 'unknown';
     }
 
-    // Create compressed file name
-    const ext = targetFormat === 'jpeg' ? 'jpg' : targetFormat;
-    const compressedFileName = file.name
-      .split('.')
-      .slice(0, -1)
-      .join('.') + `.${ext}`;
+    const compressedFileName = index !== undefined ? `${index + 1}.${ext}` : `compressed.${ext}`;
 
-    // Convert Buffer to Uint8Array for File constructor compatibility
     const compressedFile = new File([new Uint8Array(processedBuffer)], compressedFileName, {
       type: mimeType,
       lastModified: Date.now(),
@@ -208,9 +194,6 @@ export async function compressImage(
   }
 }
 
-/**
- * Batch compress multiple images
- */
 export async function compressImages(
   files: File[],
   config: CompressionConfig = DEFAULT_CONFIG
@@ -229,11 +212,10 @@ export async function compressImages(
     console.log(`\n--- Processing image ${i + 1}/${validImages.length}: ${file.name} ---`);
     
     try {
-      const result = await compressImage(file, config);
+      const result = await compressImage(file, config, i);
       results.push(result);
     } catch (error) {
       console.error(`Failed to compress ${file.name}:`, error);
-      // Continue with other files instead of failing completely
       const { width, height } = await getImageDimensions(file).catch(() => ({ width: 0, height: 0 }));
       results.push({
         compressedFile: file,
@@ -252,9 +234,6 @@ export async function compressImages(
   return results;
 }
 
-/**
- * Get compression statistics
- */
 export function getCompressionStats(results: CompressionResult[]): {
   totalOriginalSize: number;
   totalCompressedSize: number;
