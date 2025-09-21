@@ -1,6 +1,6 @@
 // app/home/page.tsx
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { AppUser, Student, VerifiedUser } from "@/lib/auths/types";
+import type { AppUser, Student, VerifiedUser } from "@/lib/auth/types";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";

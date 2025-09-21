@@ -1,8 +1,7 @@
 "use client";
 import { motion, type Variants } from "framer-motion";
 import Link from "next/link";
-import Image from "next/image";
-import logo from "@/components/images/logo.png"; // Updated to .png
+import { Logo } from "@/components/logo/logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +31,7 @@ import {
   Fingerprint,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { VerifiedUser } from "@/lib/auths/types";
+import { VerifiedUser } from "@/lib/auth/types";
 
 const featuresMain = [
   {
@@ -258,16 +257,7 @@ export default function LandingPage() {
             transition={{ duration: 0.6 }}
             className="mb-8"
           >
-            <motion.img
-              src={logo.src}
-              alt="VPeak logo"
-              width={80}
-              height={80}
-              variants={logoVariants}
-              initial="hidden"
-              animate="visible"
-              className="mx-auto mb-6"
-            />
+            <Logo size={100}/>
             <Badge variant="secondary" className="mb-4 inline-flex items-center gap-1">
               <Sparkles className="h-4 w-4" />
               Unified Campus Platform

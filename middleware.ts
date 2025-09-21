@@ -1,35 +1,37 @@
 // middleware.ts
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ["/", "/login", "/login/email", "/auth/error"];
-const EXCLUDED_PREFIX = ["/_next", "/api", "/favicon.ico", "/assets", "/images"];
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
 
-export function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-  if (EXCLUDED_PREFIX.some((p) => pathname.startsWith(p))) {
+  // Allow auth callback
+  if (pathname.startsWith('/auth/callback')) {
     return NextResponse.next();
   }
 
-  const token = req.cookies.get("auth_token")?.value;
-
-  // If accessing protected paths without token => go to login
-  if (!PUBLIC_PATHS.includes(pathname) && !token) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+  // Disable RSC for /auth and /login routes to prevent infinite loops
+  if (pathname.startsWith('/auth') || pathname.startsWith('/login')) {
+    const response = NextResponse.next();
+    response.headers.set('RSC', '0');
+    response.headers.set('Cache-Control', 'no-store');
+    return response;
   }
 
-  // If accessing public paths while authed => go to home
-  if (PUBLIC_PATHS.includes(pathname) && token) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/home";
-    return NextResponse.redirect(url);
-  }
-
+  // Default: continue normally
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/((?!_next|api|favicon.ico|assets|images).*)"],
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - auth (auth routes except callback)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico|auth/callback).*)',
+  ],
 };

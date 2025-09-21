@@ -1,4 +1,4 @@
-// frontend: app/api/auth/callback/route.ts (assuming this is the GET handler file)
+// frontend: app/auth/callback/route.ts (assuming this is the GET handler file)
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers"; // For setting cookies

@@ -18,7 +18,7 @@ import {
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Sun, Moon, Settings, LogOut } from "lucide-react";
 import logo from "@/components/images/logo.png";
-import { signOut } from "@/lib/auths/actions";
+import { signOut } from "@/lib/auth/actions";
 
 export function SiteHeaderClient({ user }: { user: { name?: string; image?: string } | null }) {
   const router = useRouter();

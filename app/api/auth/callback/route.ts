@@ -1,75 +1,135 @@
-// app/api/auth/callback/route.ts
-import { NextResponse, type NextRequest } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { Database } from "@/lib/database.types";
 
-const REQUIRED_FIELDS = ["name", "regno", "dob", "dept", "personal_email", "phone"] as const;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export async function GET(request: NextRequest) {
-  const supabase = createSupabaseServerClient();
-  const url = new URL(request.url);
-  const code = url.searchParams.get("code");
-  const err = url.searchParams.get("error");
+  const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get("code");
+  const next = searchParams.get("next") ?? "/dashboard";
+  const error = searchParams.get("error");
+  const errorDescription = searchParams.get("error_description");
 
-  if (err) {
-    return NextResponse.redirect(new URL(`/auth/error?error=${encodeURIComponent(err)}`, request.url));
+  console.log("🔄 Auth callback received:", { 
+    code: !!code, 
+    error, 
+    errorDescription, 
+    next,
+    fullUrl: request.url
+  });
+
+  // Handle OAuth errors from URL params
+  if (error || errorDescription) {
+    console.error("❌ OAuth error:", { error, errorDescription });
+    const redirectUrl = new URL("/login", origin);
+    redirectUrl.searchParams.set("error", error || errorDescription || "Authentication failed");
+    return NextResponse.redirect(redirectUrl);
   }
 
   if (!code) {
-    return NextResponse.redirect(new URL("/auth/error?error=missing_code", request.url));
+    console.error("❌ No authorization code received");
+    const redirectUrl = new URL("/login", origin);
+    redirectUrl.searchParams.set("error", "Invalid callback - no code");
+    return NextResponse.redirect(redirectUrl);
   }
 
-  // 1) Exchange auth code for a session
-  const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-  if (exchangeError || !sessionData?.session) {
-    return NextResponse.redirect(new URL("/auth/error?error=exchange_failed", request.url));
-  }
+  try {
+    const cookieStore = await cookies();
+    const supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch (e) {
+            console.error("Cookie setting error:", e);
+          }
+        },
+      },
+    });
 
-  // 2) Verify with local API to mint custom JWT
-  const baseUrl = new URL(request.url).origin;
-  const supabaseToken = sessionData.session.access_token;
-  const refreshToken = sessionData.session.refresh_token;
+    // Exchange code for session
+    console.log("🔄 Exchanging code for session...");
+    const { data: { session }, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
-  const verifyResp = await fetch(`${baseUrl}/api/auth/verify-token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "User-Agent": "NextJS-OAuth-Client/1.0" },
-    body: JSON.stringify({ token: supabaseToken, refresh_token: refreshToken }),
-  });
-  if (!verifyResp.ok) {
-    return NextResponse.redirect(new URL("/auth/error?error=api_verification_failed", request.url));
-  }
-  const { access_token: customJWT, user: backendUser } = await verifyResp.json();
+    console.log("📋 Exchange result:", { 
+      hasSession: !!session, 
+      exchangeError: exchangeError?.message,
+      userId: session?.user?.id 
+    });
 
-  // 3) Fetch current Supabase user id
-  const { data: userData } = await supabase.auth.getUser();
-  const supabaseUserId = userData?.user?.id;
-
-  // 4) Check students row completeness
-  let dest = "/setup";
-  if (supabaseUserId) {
-    const { data: student } = await supabase
-      .from("students")
-      .select("uid, name, regno, dob, dept, personal_email, phone")
-      .eq("uid", supabaseUserId)
-      .maybeSingle();
-
-    const missing = REQUIRED_FIELDS.filter((k) => !student?.[k as keyof typeof student]);
-    if (student && missing.length === 0) {
-      dest = "/home";
+    if (exchangeError || !session) {
+      console.error("❌ Exchange error:", exchangeError);
+      const redirectUrl = new URL("/login", origin);
+      redirectUrl.searchParams.set("error", "Failed to exchange code for session");
+      return NextResponse.redirect(redirectUrl);
     }
-  }
 
-  // 5) Build redirect response and set cookies
-  const res = NextResponse.redirect(new URL(dest, request.url));
-  const baseCookie = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
-    path: "/",
-  };
-  res.cookies.set("auth_token", customJWT, { ...baseCookie, maxAge: 60 * 60 });
-  if (refreshToken) {
-    res.cookies.set("refresh_token", refreshToken, { ...baseCookie, maxAge: 60 * 60 * 24 * 7 });
+    const user = session.user;
+    const email = user.email!;
+
+    console.log("✅ User authenticated:", { email, userId: user.id });
+
+    // Validate email domain
+    if (!email.endsWith("@vitstudent.ac.in")) {
+      console.log("❌ Invalid email domain:", email);
+      await supabase.auth.signOut();
+      const redirectUrl = new URL("/login", origin);
+      redirectUrl.searchParams.set("error", "Only vitstudent.ac.in email addresses are allowed");
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    // Extract name and regno from user metadata
+    const fullName = user.user_metadata?.full_name || user.user_metadata?.name || email.split('@')[0];
+    const nameParts = fullName.trim().split(/\s+/);
+    const regno = nameParts.pop() || "";
+    const name = nameParts.join(" ") || "Student";
+
+    console.log("👤 User data extracted:", { name, regno, email });
+
+    // Call session create API to set custom cookies
+    console.log("🔄 Creating custom session...");
+    const sessionResponse = await fetch(`${origin}/api/auth/session/create`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId: user.id,
+        email,
+        name,
+        regno,
+      }),
+      credentials: 'include',
+    });
+
+    console.log("📡 Session API response:", { status: sessionResponse.status });
+
+    if (!sessionResponse.ok) {
+      const errorData = await sessionResponse.json();
+      console.error("❌ Session create failed:", errorData);
+      const redirectUrl = new URL("/login", origin);
+      redirectUrl.searchParams.set("error", errorData.error || "Failed to create session");
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    console.log("🎉 Authentication successful! Redirecting to:", next);
+    
+    // Success - redirect to dashboard
+    const redirectUrl = new URL(next, origin);
+    return NextResponse.redirect(redirectUrl);
+
+  } catch (err) {
+    console.error("💥 Callback error:", err);
+    const redirectUrl = new URL("/login", origin);
+    redirectUrl.searchParams.set("error", "Server error during authentication");
+    return NextResponse.redirect(redirectUrl);
   }
-  res.cookies.set("user_data", JSON.stringify(backendUser ?? {}), { ...baseCookie, maxAge: 60 * 60 });
-  return res;
 }

@@ -1,6 +1,6 @@
 // app/components/header.tsx
 import { SiteHeaderClient } from "./header.client";
-import type { AppUser } from "@/lib/auths/types";
+import type { AppUser } from "@/lib/auth/types";
 
 export default function SiteHeader({ user }: { user: AppUser | null }) {
   const headerUser = user

@@ -1,8 +1,14 @@
-// app/login/actions.ts
 "use server";
 
-import { signInWithGoogle as _signInWithGoogle } from "@/lib/auths/actions";
+import { signInWithGoogle } from "@/lib/auth/actions";
+import { redirect } from "next/navigation";
 
 export async function signInWithGoogleAction() {
-  await _signInWithGoogle();
+  try {
+    // This will redirect to Google's OAuth page
+    redirect(await signInWithGoogle());
+  } catch (error) {
+    console.error("Sign in action error:", error);
+    throw new Error("Failed to initiate Google sign-in");
+  }
 }
