@@ -1,7 +1,6 @@
-// @/components/Comments.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -30,11 +29,14 @@ export function Comments({
   currentUserId: initialUserId,
 }: CommentsProps) {
   const { isAuthenticated, user, currentUserId } = useCookies(initialAuthenticated, initialUserId);
+  console.log('Current user ID:', currentUserId); // Debug log
   const [comments, setComments] = useState<Comment[]>(initialComments);
   const [commentsCount, setCommentsCount] = useState(initialCommentsCount);
   const [commentText, setCommentText] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const popoverTriggerRef = useRef<HTMLButtonElement>(null);
 
   const handleAddComment = async () => {
     if (!isAuthenticated || !currentUserId) {
@@ -61,21 +63,23 @@ export function Comments({
     setComments([newComment, ...comments]);
     setCommentsCount((prev) => prev + 1);
     setCommentText('');
+    setIsPopoverOpen(false);
 
     try {
       const response = await fetch('/api/posts/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ post_id: postId, comment: commentText }),
         credentials: 'include',
+        body: JSON.stringify({ post_id: postId, comment: commentText, user_id: currentUserId }),
       });
 
+      const data = await response.json();
+      console.log('Add comment response:', data); // Debug log
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to add comment');
+        throw new Error(data.error || 'Failed to add comment');
       }
 
-      const { comment: savedComment } = await response.json();
+      const { comment: savedComment } = data;
       setComments((prev) =>
         prev.map((c) => (c.uuid === newComment.uuid ? savedComment : c))
       );
@@ -88,6 +92,7 @@ export function Comments({
         credentials: 'include',
       });
     } catch (error: any) {
+      console.error('Add comment error:', error); // Debug log
       setComments(comments);
       setCommentsCount(commentsCount);
       toast.error(error.message || 'Failed to add comment');
@@ -121,21 +126,23 @@ export function Comments({
       const response = await fetch('/api/posts/comments', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ comment_id: commentId, post_id: postId, comment: commentText }),
         credentials: 'include',
+        body: JSON.stringify({ comment_id: commentId, post_id: postId, comment: commentText }),
       });
 
+      const data = await response.json();
+      console.log('Edit comment response:', data); // Debug log
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update comment');
+        throw new Error(data.error || 'Failed to update comment');
       }
 
-      const { comment: updatedComment } = await response.json();
+      const { comment: updatedComment } = data;
       setComments((prev) =>
         prev.map((c) => (c.uuid === commentId ? updatedComment : c))
       );
       setCommentText('');
       setEditingCommentId(null);
+      setIsPopoverOpen(false);
       toast.success('Comment updated!');
 
       await fetch('/api/revalidate', {
@@ -145,6 +152,7 @@ export function Comments({
         credentials: 'include',
       });
     } catch (error: any) {
+      console.error('Edit comment error:', error); // Debug log
       setComments(originalComments);
       toast.error(error.message || 'Failed to update comment');
     } finally {
@@ -167,13 +175,14 @@ export function Comments({
       const response = await fetch('/api/posts/comments', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ comment_id: commentId, post_id: postId }),
         credentials: 'include',
+        body: JSON.stringify({ comment_id: commentId, post_id: postId }),
       });
 
+      const data = await response.json();
+      console.log('Delete comment response:', data); // Debug log
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete comment');
+        throw new Error(data.error || 'Failed to delete comment');
       }
 
       toast.success('Comment deleted!');
@@ -185,6 +194,7 @@ export function Comments({
         credentials: 'include',
       });
     } catch (error: any) {
+      console.error('Delete comment error:', error); // Debug log
       setComments(originalComments);
       setCommentsCount(commentsCount);
       toast.error(error.message || 'Failed to delete comment');
@@ -194,19 +204,22 @@ export function Comments({
   };
 
   const startEditing = (comment: Comment) => {
+    console.log('Starting edit for comment:', comment.uuid); // Debug log
     setEditingCommentId(comment.uuid);
     setCommentText(comment.comment);
+    setIsPopoverOpen(true);
   };
 
   return (
     <div className="flex items-center space-x-2">
-      <Popover>
+      <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="ghost"
             size="sm"
             className="p-0 h-auto text-foreground hover:bg-transparent"
-            disabled={!isAuthenticated}
+            disabled={!isAuthenticated && !editingCommentId}
+            ref={popoverTriggerRef}
           >
             <MessageCircle className="h-4 w-4 mr-1" />
             <span>Comment</span>
@@ -236,20 +249,19 @@ export function Comments({
                   disabled={isPending}
                 />
                 <div className="flex justify-end space-x-2">
-                  {editingCommentId && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingCommentId(null);
-                        setCommentText('');
-                      }}
-                      disabled={isPending}
-                      className="text-foreground border-border"
-                    >
-                      Cancel
-                    </Button>
-                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingCommentId(null);
+                      setCommentText('');
+                      setIsPopoverOpen(false);
+                    }}
+                    disabled={isPending}
+                    className="text-foreground border-border"
+                  >
+                    Cancel
+                  </Button>
                   <Button
                     size="sm"
                     onClick={() =>
