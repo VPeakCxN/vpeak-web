@@ -8,12 +8,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { LogOut, Mail, User, Calendar, GraduationCap } from "lucide-react";
+import { LogOut, Mail, User, Calendar, GraduationCap, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AuthCookieData } from "@/lib/cookies.types";
 import { Avatar } from "@radix-ui/react-avatar";
+
 interface DashboardClientProps {
   error?: string | undefined;
 }
@@ -188,16 +189,31 @@ export function DashboardClient({ error }: DashboardClientProps) {
     );
   }
 
-  // ✅ SHOW DASHBOARD - JUST HELLO NAME AS REQUESTED
+  // ✅ SHOW DASHBOARD
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="min-h-screen bg-gradient-to-br from-background to-muted/30 p-4"
+      className="min-h-screen bg-gradient-to-br from-background to-muted/30 p-4 relative"
     >
+      {/* Floating Create Post Button */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.5 }}
+        className="fixed bottom-6 right-6 z-50"
+      >
+        <Button
+          onClick={() => router.push("http://localhost:3000/posts/create")}
+          className="rounded-full w-14 h-14 flex items-center justify-center bg-primary hover:bg-primary/90 shadow-lg"
+        >
+          <Plus className="w-6 h-6 text-primary-foreground" />
+        </Button>
+      </motion.div>
+
       <div className="container mx-auto max-w-4xl">
-        {/* Header - SIMPLE HELLO MESSAGE */}
+        {/* Header */}
         <div className="flex justify-between items-center mb-8 py-8">
           <div className="space-y-2">
             <motion.h1 
