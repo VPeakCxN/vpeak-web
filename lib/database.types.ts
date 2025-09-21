@@ -14,6 +14,161 @@ export type Database = {
   }
   public: {
     Tables: {
+      post_comments: {
+        Row: {
+          comment: string
+          created_at: string | null
+          post_id: string
+          user_id: string
+          uuid: string
+        }
+        Insert: {
+          comment: string
+          created_at?: string | null
+          post_id: string
+          user_id: string
+          uuid?: string
+        }
+        Update: {
+          comment?: string
+          created_at?: string | null
+          post_id?: string
+          user_id?: string
+          uuid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["post_id"]
+          },
+        ]
+      }
+      post_files: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          file_name: string
+          file_url: string
+          post_id: string
+          type: string
+          uuid: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          file_name: string
+          file_url: string
+          post_id: string
+          type: string
+          uuid?: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          file_name?: string
+          file_url?: string
+          post_id?: string
+          type?: string
+          uuid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_files_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["post_id"]
+          },
+        ]
+      }
+      post_likes: {
+        Row: {
+          created_at: string | null
+          post_id: string | null
+          user_id: string | null
+          uuid: string
+        }
+        Insert: {
+          created_at?: string | null
+          post_id?: string | null
+          user_id?: string | null
+          uuid?: string
+        }
+        Update: {
+          created_at?: string | null
+          post_id?: string | null
+          user_id?: string | null
+          uuid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["post_id"]
+          },
+        ]
+      }
+      post_shares: {
+        Row: {
+          created_at: string | null
+          post_id: string | null
+          user_id: string | null
+          uuid: string
+        }
+        Insert: {
+          created_at?: string | null
+          post_id?: string | null
+          user_id?: string | null
+          uuid?: string
+        }
+        Update: {
+          created_at?: string | null
+          post_id?: string | null
+          user_id?: string | null
+          uuid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_shares_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["post_id"]
+          },
+        ]
+      }
+      posts: {
+        Row: {
+          author_id: string | null
+          content: string
+          created_at: string | null
+          post_id: string
+          title: string
+          uploaded_at: string | null
+        }
+        Insert: {
+          author_id?: string | null
+          content: string
+          created_at?: string | null
+          post_id?: string
+          title: string
+          uploaded_at?: string | null
+        }
+        Update: {
+          author_id?: string | null
+          content?: string
+          created_at?: string | null
+          post_id?: string
+          title?: string
+          uploaded_at?: string | null
+        }
+        Relationships: []
+      }
       sessions: {
         Row: {
           created_at: string
@@ -195,5 +350,5 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {},
-  },
-} as const
+  },
+} as const
