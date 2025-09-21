@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { AuthSession } from '@/lib/cookies.types'; // Import AuthSession from database.types
 
 export interface SessionData {
   uid: string;
@@ -8,14 +9,6 @@ export interface SessionData {
   email: string;
   regno: string;
   avatar?: string;
-}
-
-export interface AuthSession {
-  id: string;
-  uid: string;
-  created_at: string;
-  expires_at: string;
-  user?: SessionData;
 }
 
 export function useSession() {
@@ -32,7 +25,10 @@ export function useSession() {
         console.log('🔍 useSession: Fetching session...');
 
         const response = await fetch('/api/auth/session/fetch', {
-          credentials: 'include', // Send cookies
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
         });
 
         const data = await response.json();
@@ -40,55 +36,35 @@ export function useSession() {
         if (!response.ok) {
           console.log(`❌ useSession: Fetch failed with status ${response.status}:`, data.reason);
           setSession(null);
+          setError(data.reason || 'Session fetch failed');
           return;
         }
 
         if (data.valid) {
           console.log('✅ useSession: Valid session received:', data.session?.id);
-          const sessionData = data.session || {
-            id: data.session_id,
-            uid: data.uid,
-            created_at: data.created_at || new Date().toISOString(),
-            expires_at: data.expires_at,
+          const sessionData: AuthSession = {
+            id: data.session.id,
+            uid: data.session.uid,
+            session_key: data.session.session_key,
+            created_at: data.session.created_at,
+            expires_at: data.session.expires_at,
+            user: data.user,
           };
 
-          let userData: SessionData = {
-            uid: sessionData.uid,
-            name: '',
-            email: '',
-            regno: '',
-          };
+          setSession(sessionData);
+          localStorage.setItem('user_data', JSON.stringify(data.user));
+          console.log('✅ useSession: Session set, user:', data.user.uid);
 
-          if (data.user) {
-            userData = { ...userData, ...data.user };
-          } else if (data.supabaseUser) {
-            userData = {
-              ...userData,
-              email: data.supabaseUser.email || '',
-              name: (data.supabaseUser.user_metadata?.name as string) || '',
-            };
+          if (data.cookiesToSet) {
+            document.cookie = `session_id=${data.cookiesToSet.session_id}; path=/; max-age=604800; SameSite=Lax`;
+            document.cookie = `session_key=${data.cookiesToSet.session_key}; path=/; max-age=604800; SameSite=Lax`;
+            document.cookie = `uid=${data.cookiesToSet.uid}; path=/; max-age=604800; SameSite=Lax`;
+            document.cookie = `user_data=${JSON.stringify(data.user)}; path=/; max-age=604800; SameSite=Lax`;
           }
-
-          const storedUser = localStorage.getItem('user_data');
-          if (storedUser) {
-            try {
-              const stored = JSON.parse(storedUser);
-              userData = { ...userData, ...stored };
-            } catch {
-              console.log('⚠️ useSession: Failed to parse user_data from localStorage');
-            }
-          }
-
-          setSession({
-            ...sessionData,
-            user: userData,
-          });
-
-          localStorage.setItem('user_data', JSON.stringify(userData));
-          console.log('✅ useSession: Session set, user:', userData.uid);
         } else {
           console.log('❌ useSession: Invalid session:', data.reason);
           setSession(null);
+          setError(data.reason || 'Invalid session');
         }
       } catch (err) {
         console.error('❌ useSession: Session fetch error:', err);
@@ -100,7 +76,6 @@ export function useSession() {
     };
 
     verifySession();
-
     const interval = setInterval(verifySession, 5 * 60 * 1000);
 
     return () => clearInterval(interval);
@@ -114,6 +89,10 @@ export function useSession() {
       });
       setSession(null);
       localStorage.removeItem('user_data');
+      document.cookie = 'session_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = 'session_key=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = 'uid=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = 'user_data=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       window.location.href = '/login';
     } catch (error) {
       console.error('Logout error:', error);
