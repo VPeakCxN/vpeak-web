@@ -212,8 +212,7 @@ export function Comments({
             className="p-0 h-auto text-foreground hover:bg-transparent"
             disabled={!isAuthenticated}
           >
-            <MessageCircle className="h-4 w-4 mr-1" />
-            <span>Comment</span>
+            <MessageCircle className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-96 bg-background border-border">

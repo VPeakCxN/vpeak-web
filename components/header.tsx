@@ -1,14 +1,8 @@
 // app/components/header.tsx
 import { SiteHeaderClient } from "./header.client";
-import type { AppUser } from "@/lib/auth/types";
 
-export default function SiteHeader({ user }: { user: AppUser | null }) {
-  const headerUser = user
-    ? {
-        name: user.student?.name ?? user.username ?? user.email ?? "User",
-        image: user.avatar_url ?? undefined,
-      }
-    : null;
-
-  return <SiteHeaderClient user={headerUser} />;
+export default function SiteHeader() {
+  // This is a server component; we won't handle cookies here as they are client-side.
+  // Pass minimal props if needed, but logic will be handled in the client component.
+  return <SiteHeaderClient />;
 }

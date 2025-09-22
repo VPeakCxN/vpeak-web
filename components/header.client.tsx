@@ -1,4 +1,3 @@
-// app/components/header.client.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -16,13 +15,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Sun, Moon, Settings, LogOut } from "lucide-react";
+import { Sun, Moon, Settings, LogOut, Menu, X } from "lucide-react";
 import logo from "@/components/images/logo.png";
 import { signOut } from "@/lib/auth/actions";
+import { useCookies } from "@/hooks/getCookies";
+import { Sheet, SheetContent, SheetTrigger, SheetClose, SheetTitle, SheetDescription } from "@/components/ui/sheet"; // Added SheetDescription
+import { Sidebar } from '@/components/sidebar';
 
-export function SiteHeaderClient({ user }: { user: { name?: string; image?: string } | null }) {
+export function SiteHeaderClient() {
   const router = useRouter();
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const { authSession, isAuthenticated, user, currentUserId } = useCookies();
 
   useEffect(() => {
     const isDark = localStorage.getItem("theme") === "dark" ||
@@ -47,13 +50,50 @@ export function SiteHeaderClient({ user }: { user: { name?: string; image?: stri
     }
   };
 
+  // Use the user from cookies if available
+  const headerUser = user
+    ? {
+        name: user.name ?? "User",
+        image: user.avatar ?? undefined,
+      }
+    : null;
+
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2">
-          <Image src={logo} alt="VPeak logo" className="h-7 w-auto" priority />
-          <span className="font-semibold uppercase tracking-wide">VPeak</span>
-        </Link>
+        <div className="flex items-center gap-4">
+          {/* Mobile menu button and Sheet */}
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden" // Visible only on mobile
+                aria-label="Open menu"
+              >
+                <Menu className="h-6 w-6" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-full p-0"> {/* Full-screen on mobile */}
+              {/* Add SheetTitle and SheetDescription for accessibility - visually hidden */}
+              <SheetTitle className="sr-only">Mobile Navigation Menu</SheetTitle>
+              <SheetDescription className="sr-only">Mobile navigation menu for accessing app features</SheetDescription>
+              <div className="flex justify-end p-4">
+                <SheetClose asChild>
+                  <Button variant="ghost" size="icon" aria-label="Close">
+                    <X className="h-6 w-6" />
+                  </Button>
+                </SheetClose>
+              </div>
+              <Sidebar mobile /> {/* Pass mobile prop to render visible on mobile */}
+            </SheetContent>
+          </Sheet>
+
+          <Link href="/" className="flex items-center gap-2">
+            <Image src={logo} alt="VPeak logo" className="h-7 w-auto" priority />
+            <span className="font-semibold uppercase tracking-wide">VPeak</span>
+          </Link>
+        </div>
         <div className="flex items-center gap-4">
           {/* Animated Theme Toggle */}
           <Button
@@ -79,14 +119,14 @@ export function SiteHeaderClient({ user }: { user: { name?: string; image?: stri
             </motion.span>
           </Button>
 
-          {user ? (
+          {isAuthenticated && headerUser ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full p-0">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={user.image} alt={user.name} />
+                    <AvatarImage src={headerUser.image} alt={headerUser.name} />
                     <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                      {user.name?.charAt(0).toUpperCase()}
+                      {headerUser.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
@@ -94,7 +134,7 @@ export function SiteHeaderClient({ user }: { user: { name?: string; image?: stri
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{user.name}</p>
+                    <p className="text-sm font-medium leading-none">{headerUser.name}</p>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />

@@ -1,4 +1,3 @@
-// components/sidebar.tsx
 'use client';
 
 import { useState } from 'react';
@@ -44,7 +43,7 @@ const NAV: NavItem[] = [
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({ mobile = false }: { mobile?: boolean }) {
   const [expanded, setExpanded] = useState(true);
 
   return (
@@ -53,37 +52,41 @@ export function Sidebar() {
         aria-label="Primary"
         data-expanded={expanded}
         className={[
-          'sticky top-0 hidden h-[calc(100vh)] shrink-0 border-r border-border bg-card md:flex',
+          // Conditional visibility: Always flex on mobile, hidden until md otherwise
+          mobile ? 'flex h-full' : 'sticky top-0 hidden h-[calc(100vh)] md:flex',
+          'shrink-0 border-r border-border bg-card',
           'transition-[width] duration-200 ease-in-out',
-          expanded ? 'w-64' : 'w-20',
+          expanded ? 'w-64' : 'w-20', // Adjust width as needed; full on mobile via Sheet
         ].join(' ')}
       >
         <div className="flex h-full w-full flex-col">
-          {/* Toggle */}
-          <div className="flex items-center justify-between p-3">
-            <span
-              className={[
-                'text-sm font-semibold text-card-foreground transition-opacity',
-                expanded ? 'opacity-100' : 'opacity-0 pointer-events-none',
-              ].join(' ')}
-            >
-              Navigation
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
-              onClick={() => setExpanded((v) => !v)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <ChevronRight
+          {/* Toggle - Optional on mobile; you can hide if not needed */}
+          {!mobile && (
+            <div className="flex items-center justify-between p-3">
+              <span
                 className={[
-                  'h-4 w-4 transition-transform',
-                  expanded ? 'rotate-180' : '',
+                  'text-sm font-semibold text-card-foreground transition-opacity',
+                  expanded ? 'opacity-100' : 'opacity-0 pointer-events-none',
                 ].join(' ')}
-              />
-            </Button>
-          </div>
+              >
+                Navigation
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
+                onClick={() => setExpanded((v) => !v)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <ChevronRight
+                  className={[
+                    'h-4 w-4 transition-transform',
+                    expanded ? 'rotate-180' : '',
+                  ].join(' ')}
+                />
+              </Button>
+            </div>
+          )}
 
           {/* Nav */}
           <nav className="flex-1 space-y-1 px-2">
